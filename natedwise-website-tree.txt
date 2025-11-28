@@ -1,0 +1,79 @@
+NateWisemocha/
+├─ .wrangler/
+│  └─ state/
+│     └─ v3/
+│        ├─ cache/
+│        │  └─ miniflare-CacheObject/
+│        ├─ d1/
+│        │  └─ miniflare-D1DatabaseObject/
+│        │     ├─ 351f41b0972bbe12275e1776734dfa13f18982f9dd16b7a987b66d59fbf2dbf4.sqlite
+│        │     └─ seed.sql
+│        ├─ do/
+│        ├─ r2/
+│        │  └─ miniflare-R2BucketObject/
+│        └─ workflows/
+├─ database_backups/
+│  └─ backup_before_injection.sqlite
+├─ generated_content/
+│  ├─ mathematics_n4 copy.sql
+│  └─ mathematics_n4.sql
+├─ migrations/
+│  ├─ 1/
+│  │  └─ down.sql
+│  ├─ 2/
+│  │  └─ down.sql
+│  ├─ 1.sql
+│  └─ 2.sql
+├─ scripts/
+│  └─ content_injector.py
+├─ src/
+│  ├─ react-app/
+│  │  ├─ components/
+│  │  │  ├─ Navigation.tsx
+│  │  │  ├─ ProgressRing.tsx
+│  │  │  ├─ QuestionRenderer.tsx
+│  │  │  ├─ QuestionVisualizer.tsx
+│  │  │  └─ StreakTracker.tsx
+│  │  ├─ pages/
+│  │  │  ├─ Achievements.tsx
+│  │  │  ├─ AdminContentManager.tsx
+│  │  │  ├─ Analytics.tsx
+│  │  │  ├─ AuthCallback.tsx
+│  │  │  ├─ DailyChallenges.tsx
+│  │  │  ├─ Dashboard.tsx
+│  │  │  ├─ Home.tsx
+│  │  │  ├─ JsonBulkImporter.tsx
+│  │  │  ├─ Leaderboard.tsx
+│  │  │  ├─ ModuleDetail.tsx
+│  │  │  ├─ SkillPractice.tsx
+│  │  │  ├─ SubjectDetail.tsx
+│  │  │  └─ Subjects.tsx
+│  │  ├─ App.tsx
+│  │  ├─ index.css
+│  │  ├─ main.tsx
+│  │  ├─ router.tsx
+│  │  └─ vite-env.d.ts
+│  ├─ shared/
+│  │  └─ types.ts
+│  └─ worker/
+│     ├─ env.d.ts
+│     ├─ index.ts
+│     └─ worker-configuration.d.ts
+├─ .env
+├─ .gitignore
+├─ add_questions.sql
+├─ combined_tool.py
+├─ eslint.config.js
+├─ index.html
+├─ natewise-website-snapshot.txt
+├─ package-lock.json
+├─ package.json
+├─ postcss.config.js
+├─ README.md
+├─ tailwind.config.js
+├─ tsconfig.app.json
+├─ tsconfig.json
+├─ tsconfig.node.json
+├─ tsconfig.worker.json
+├─ vite.config.ts
+└─ wrangler.json
