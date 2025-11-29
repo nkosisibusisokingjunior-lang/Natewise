@@ -12,14 +12,14 @@ interface GlassButtonProps
 
 const baseClasses =
   "inline-flex items-center justify-center gap-2 rounded-full font-medium " +
-  "transition-all focus:outline-none focus:ring-2 focus:ring-brand/70 focus:ring-offset-2 focus:ring-offset-slate-950 " +
+  "transition-all focus:outline-none focus:ring-2 focus:ring-brand/70 focus:ring-offset-2 focus:ring-offset-white " +
   "disabled:opacity-60 disabled:cursor-not-allowed";
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "bg-gradient-to-r from-brand-soft to-brand-accent text-white shadow-md shadow-black/40",
+    "bg-gradient-to-r from-brand-soft to-brand-accent text-white shadow-md shadow-[rgba(0,0,0,0.18)]",
   secondary:
-    "bg-white/10 text-slate-50 border border-white/25 shadow-sm hover:bg-white/15",
+    "bg-white text-slate-700 border border-black/10 shadow-sm hover:bg-brand-soft/10",
   success:
     "bg-gradient-to-r from-emerald-500 to-emerald-400 text-white shadow-md shadow-emerald-500/40",
   warning:

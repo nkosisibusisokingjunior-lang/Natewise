@@ -19,30 +19,25 @@ export default {
     },
 
     extend: {
-      /** -----------------------------------------------------
-       * COLORS — Apple-inspired, frosted glass palette
-       ----------------------------------------------------- */
+      // Accessible light palette with strong contrast
       colors: {
         brand: {
-          DEFAULT: "#4F46E5",
-          soft: "#6366F1",
-          strong: "#4338CA",
-          accent: "#EC4899",
+          DEFAULT: "#007BFF", // primary
+          soft: "#4da3ff",
+          strong: "#0056B3",
+          accent: "#FF9800", // secondary accent
         },
         surface: {
-          DEFAULT: "#020617", // slate-950
-          subtle: "#0f172a",  // slate-900
+          DEFAULT: "#FFFFFF",
+          subtle: "#F5F5F5",
         },
         glass: {
-          light: "rgba(255,255,255,0.08)",
-          dark: "rgba(0,0,0,0.35)",
-          border: "rgba(255,255,255,0.25)",
+          light: "rgba(255,255,255,0.9)",
+          dark: "rgba(0,0,0,0.12)",
+          border: "rgba(0,0,0,0.08)",
         },
       },
 
-      /** -----------------------------------------------------
-       * FONTS — Apple system stack
-       ----------------------------------------------------- */
       fontFamily: {
         sans: [
           "-apple-system",
@@ -56,9 +51,6 @@ export default {
         ],
       },
 
-      /** -----------------------------------------------------
-       * BACKDROPS / BLUR
-       ----------------------------------------------------- */
       backdropBlur: {
         xs: "2px",
         sm: "4px",
@@ -68,30 +60,19 @@ export default {
         "2xl": "24px",
       },
 
-      /** -----------------------------------------------------
-       * SHADOWS — soft glass shadows
-       ----------------------------------------------------- */
       boxShadow: {
         glass:
-          "0 8px 20px rgba(0,0,0,0.45), 0 0 1px rgba(255,255,255,0.15) inset",
-        card: 
-          "0 10px 30px rgba(0,0,0,0.35)",
-        glow: 
-          "0 0 80px 20px rgba(99,102,241,0.2)",
+          "0 8px 20px rgba(0,0,0,0.1), 0 0 1px rgba(0,0,0,0.05) inset",
+        card: "0 10px 30px rgba(0,0,0,0.12)",
+        glow: "0 0 80px 20px rgba(0,123,255,0.15)",
       },
 
-      /** -----------------------------------------------------
-       * BORDER RADIUS — smoother glass UI
-       ----------------------------------------------------- */
       borderRadius: {
         xl: "1rem",
         "2xl": "1.25rem",
         glass: "18px",
       },
 
-      /** -----------------------------------------------------
-       * ANIMATIONS — smooth opacity, fade-in, slide
-       ----------------------------------------------------- */
       keyframes: {
         fadeIn: {
           "0%": { opacity: 0 },
@@ -113,17 +94,11 @@ export default {
         pulseSoft: "pulseSoft 2s ease-in-out infinite",
       },
 
-      /** -----------------------------------------------------
-       * TRANSITIONS
-       ----------------------------------------------------- */
       transitionDuration: {
         400: "400ms",
         600: "600ms",
       },
 
-      /** -----------------------------------------------------
-       * OPACITY — more granular glass levels
-       ----------------------------------------------------- */
       opacity: {
         15: "0.15",
         35: "0.35",
@@ -132,3 +107,4 @@ export default {
   },
   plugins: [],
 };
+

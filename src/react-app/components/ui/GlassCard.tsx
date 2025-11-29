@@ -1,26 +1,29 @@
-import type { ReactNode, HTMLAttributes } from "react";
+import type { ReactNode } from "react";
 
-export interface GlassCardProps extends HTMLAttributes<HTMLDivElement> {
+export type GlassCardProps<T extends keyof JSX.IntrinsicElements = "div"> = {
+  as?: T;
   children: ReactNode;
   className?: string;
   /**
    * Set to false to disable hover elevation / border change
    */
   hover?: boolean;
-}
+} & Omit<JSX.IntrinsicElements[T], "className" | "children">;
 
-export function GlassCard({
+export function GlassCard<T extends keyof JSX.IntrinsicElements = "div">({
+  as,
   children,
   className = "",
   hover = true,
   ...rest
-}: GlassCardProps) {
+}: GlassCardProps<T>) {
+  const Component = (as || "div") as keyof JSX.IntrinsicElements;
   const hoverClasses = hover
     ? "hover:border-white/40 hover:bg-white/10 hover:shadow-card hover:-translate-y-[1px]"
     : "";
 
   return (
-    <div
+    <Component
       {...rest}
       className={[
         "relative overflow-hidden rounded-2xl border border-glass-border bg-glass-light",
@@ -32,8 +35,8 @@ export function GlassCard({
         .join(" ")}
     >
       {/* subtle inner gradient glow */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-brand-soft/10" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-brand-soft/15" />
       <div className="relative z-10">{children}</div>
-    </div>
+    </Component>
   );
 }
