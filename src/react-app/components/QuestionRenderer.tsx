@@ -1,6 +1,6 @@
 // components/QuestionRenderer.tsx
 import React, { useEffect, useRef } from 'react';
-import { MathJaxContext, MathJax } from 'react-mathjax';
+import { MathJaxContext, MathJax } from 'better-react-mathjax';
 import mermaid from 'mermaid';
 
 interface QuestionRendererProps {

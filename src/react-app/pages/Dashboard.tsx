@@ -15,77 +15,37 @@ import { AppLayout } from "@/react-app/components/layout/AppLayout";
 import { GlassCard } from "@/react-app/components/ui/GlassCard";
 import { GlassButton } from "@/react-app/components/ui/GlassButton";
 import { LoadingSpinner } from "@/react-app/components/ui/LoadingSpinner";
+import api from "@/react-app/services/api";
 
 interface DashboardStats {
-  skillsPracticing: number;
-  skillsMastered: number;
-  currentStreak: number;
-  totalBadges: number;
+  skills_practicing: number;
+  skills_mastered: number;
+  current_streak: number;
+  total_badges: number;
 }
 
 interface RecentSkill {
-  id: number;
+  id: string;
   name: string;
-  smartScore: number;
-  subjectName: string;
-  subjectColor: string;
+  smart_score: number;
+  subject_name: string;
+  subject_color: string;
 }
 
 interface DailyChallenge {
-  id: number;
-  skillId: number;
-  skillName: string;
-  targetQuestions: number;
-  targetAccuracy: number;
-  xpReward: number;
-  questionsCompleted: number;
-  questionsCorrect: number;
+  id: string;
+  skill_id: string;
+  skill_name: string;
+  subject_name: string;
+  questions_required: number;
+  accuracy_required: number;
+  xp_reward: number;
+  questions_completed: number;
+  questions_correct: number;
+  challenge_date: string;
+  error?: string;
+  message?: string;
 }
-
-/** ------------------------------------------------------------------
- * Mock data for now – later you can plug this into your API layer
- * -------------------------------------------------------------------*/
-const MOCK_STATS: DashboardStats = {
-  skillsPracticing: 6,
-  skillsMastered: 14,
-  currentStreak: 9,
-  totalBadges: 7,
-};
-
-const MOCK_RECENT_SKILLS: RecentSkill[] = [
-  {
-    id: 1,
-    name: "Financial Mathematics: Simple Interest",
-    smartScore: 78,
-    subjectName: "Mathematics N3",
-    subjectColor: "from-sky-400 to-cyan-400",
-  },
-  {
-    id: 2,
-    name: "DC Circuits: Ohm’s Law",
-    smartScore: 63,
-    subjectName: "Electrical Trade Theory N2",
-    subjectColor: "from-emerald-400 to-emerald-500",
-  },
-  {
-    id: 3,
-    name: "Technical Drawing: First Angle Projection",
-    smartScore: 52,
-    subjectName: "Engineering Drawing N3",
-    subjectColor: "from-amber-400 to-orange-500",
-  },
-];
-
-const MOCK_DAILY_CHALLENGE: DailyChallenge = {
-  id: 1,
-  skillId: 2,
-  skillName: "DC Circuits: Ohm’s Law",
-  targetQuestions: 15,
-  targetAccuracy: 80,
-  xpReward: 50,
-  questionsCompleted: 9,
-  questionsCorrect: 7,
-};
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -97,27 +57,43 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  /** Simulate loading dashboard data */
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-        // TODO: replace with real API calls
-        await new Promise((res) => setTimeout(res, 400));
 
-        setStats(MOCK_STATS);
-        setRecentSkills(MOCK_RECENT_SKILLS);
-        setDailyChallenge(MOCK_DAILY_CHALLENGE);
-      } catch (e) {
+        const [statsRes, recentRes, challengeRes] = await Promise.all([
+          api.get<DashboardStats>("/dashboard/stats"),
+          api.get<RecentSkill[]>("/dashboard/recent-skills"),
+          api.get<DailyChallenge>("/daily-challenges/today").catch((err) => {
+            // If challenge is missing (404) or unauthorized, return null.
+            if (err?.response?.status === 404) return null;
+            throw err;
+          }),
+        ]);
+
+        const statsData = statsRes.data;
+        const recentData = recentRes.data;
+        const challengeData =
+          challengeRes && !challengeRes.data?.error && !challengeRes.data?.message
+            ? (challengeRes.data as DailyChallenge)
+            : null;
+
+        setStats(statsData);
+        setRecentSkills(recentData);
+        setDailyChallenge(challengeData);
+      } catch (e: any) {
         console.error(e);
-        setError("We couldn’t load your dashboard right now. Please try again.");
+        setError(
+          e?.message || "We couldn't load your dashboard right now. Please try again."
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    void fetchData();
   }, []);
 
   const handleGoToSubjects = () => navigate("/subjects");
@@ -126,7 +102,7 @@ export default function Dashboard() {
 
   const handleStartChallenge = () => {
     if (!dailyChallenge) return;
-    navigate(`/skills/${dailyChallenge.skillId}/practice`);
+    navigate(`/skills/${dailyChallenge.skill_id}/practice`);
   };
 
   return (
@@ -159,25 +135,25 @@ export default function Dashboard() {
                   <StatCard
                     icon={BookOpen}
                     label="Skills practicing"
-                    value={stats.skillsPracticing.toString()}
+                    value={stats.skills_practicing.toString()}
                     helper="Keep building consistency"
                   />
                   <StatCard
                     icon={Target}
                     label="Skills mastered"
-                    value={stats.skillsMastered.toString()}
+                    value={stats.skills_mastered.toString()}
                     helper="Aim for SmartScore 80+"
                   />
                   <StatCard
                     icon={Zap}
                     label="Current streak"
-                    value={`${stats.currentStreak} days`}
-                    helper="Don’t break the chain"
+                    value={`${stats.current_streak} days`}
+                    helper="Don't break the chain"
                   />
                   <StatCard
                     icon={Trophy}
                     label="Badges earned"
-                    value={stats.totalBadges.toString()}
+                    value={stats.total_badges.toString()}
                     helper="Check your achievements"
                     onClick={handleGoToAchievements}
                     clickable
@@ -209,8 +185,8 @@ export default function Dashboard() {
 
                 {recentSkills.length === 0 ? (
                   <p className="py-4 text-sm text-slate-400">
-                    You haven&apos;t practiced any skills yet. Start by choosing
-                    a subject.
+                    You haven't practiced any skills yet. Start by choosing a
+                    subject.
                   </p>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
@@ -238,11 +214,11 @@ export default function Dashboard() {
                   </div>
                   <h2 className="mt-3 text-lg font-semibold text-slate-50">
                     {dailyChallenge
-                      ? dailyChallenge.skillName
+                      ? dailyChallenge.skill_name
                       : "No challenge yet"}
                   </h2>
                   <p className="mt-1 text-xs text-slate-300">
-                    Complete today&apos;s focused challenge to keep your streak
+                    Complete today's focused challenge to keep your streak
                     alive and earn extra XP.
                   </p>
                 </div>
@@ -253,15 +229,15 @@ export default function Dashboard() {
                   <div className="grid gap-3 sm:grid-cols-3">
                     <DailyDetail
                       label="Questions"
-                      value={`${dailyChallenge.questionsCompleted}/${dailyChallenge.targetQuestions}`}
+                      value={`${dailyChallenge.questions_completed}/${dailyChallenge.questions_required}`}
                     />
                     <DailyDetail
                       label="Accuracy target"
-                      value={`${dailyChallenge.targetAccuracy}%`}
+                      value={`${dailyChallenge.accuracy_required}%`}
                     />
                     <DailyDetail
                       label="Reward"
-                      value={`${dailyChallenge.xpReward} XP`}
+                      value={`${dailyChallenge.xp_reward} XP`}
                     />
                   </div>
 
@@ -274,8 +250,8 @@ export default function Dashboard() {
                           {Math.min(
                             100,
                             Math.round(
-                              (dailyChallenge.questionsCompleted /
-                                dailyChallenge.targetQuestions) *
+                              (dailyChallenge.questions_completed /
+                                dailyChallenge.questions_required) *
                                 100
                             )
                           )}
@@ -289,8 +265,8 @@ export default function Dashboard() {
                             width: `${Math.min(
                               100,
                               Math.round(
-                                (dailyChallenge.questionsCompleted /
-                                  dailyChallenge.targetQuestions) *
+                                (dailyChallenge.questions_completed /
+                                  dailyChallenge.questions_required) *
                                   100
                               )
                             )}%`,
@@ -302,7 +278,7 @@ export default function Dashboard() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2 text-[11px] text-slate-400">
                         <Clock className="h-3.5 w-3.5" />
-                        <span>Best done in one focused 15–20 minute session.</span>
+                        <span>Best done in one focused 15-20 minute session.</span>
                       </div>
                       <div className="flex gap-2">
                         <GlassButton
@@ -322,14 +298,14 @@ export default function Dashboard() {
                 </>
               ) : (
                 <div className="mt-4 text-sm text-slate-400">
-                  There&apos;s no daily challenge yet. Try practicing a skill
-                  from your subjects to generate targeted practice.
+                  There's no daily challenge yet. Try practicing a skill from
+                  your subjects to generate targeted practice.
                 </div>
               )}
             </GlassCard>
           </div>
 
-          {/* Bottom section – small promo / CTA row */}
+          {/* Bottom section - small promo / CTA row */}
           <div className="grid gap-4 lg:grid-cols-3">
             <GlassCard className="p-4 flex items-center justify-between">
               <div>
@@ -462,7 +438,7 @@ function RecentSkillCard({
       <div className="flex flex-col gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-            {skill.subjectName}
+            {skill.subject_name}
           </p>
           <p className="mt-1 text-sm font-semibold text-slate-50">
             {skill.name}
@@ -475,14 +451,14 @@ function RecentSkillCard({
               SmartScore
             </p>
             <p className="mt-0.5 text-lg font-semibold text-white">
-              {skill.smartScore}
+              {skill.smart_score}
             </p>
           </div>
           <div className="flex-1">
             <div className="h-1.5 overflow-hidden rounded-full bg-slate-800/80">
               <div
-                className={`h-full bg-gradient-to-r ${skill.subjectColor}`}
-                style={{ width: `${Math.min(skill.smartScore, 100)}%` }}
+                className={`h-full bg-gradient-to-r ${skill.subject_color}`}
+                style={{ width: `${Math.min(skill.smart_score, 100)}%` }}
               />
             </div>
           </div>

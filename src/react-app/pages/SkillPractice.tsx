@@ -20,7 +20,8 @@ import { GlassButton } from "@/react-app/components/ui/GlassButton";
 
 // ----------------------------------------------------
 // Types
-// ----------------------------------------------------
+// -----------------------------------
+// -----------------
 
 interface Question {
   id: number;
@@ -128,10 +129,12 @@ export default function SkillPractice() {
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
   const [masteryProgress, setMasteryProgress] = useState(0);
+  const [questionQueue, setQuestionQueue] = useState<Question[]>([]);
 
   // UI state
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [readyForNext, setReadyForNext] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
@@ -187,8 +190,10 @@ export default function SkillPractice() {
 
         if (adaptiveData.questions?.length > 0) {
           setCurrentQuestion(adaptiveData.questions[0]);
+          setQuestionQueue(adaptiveData.questions.slice(1));
         } else {
           setCurrentQuestion(null);
+          setQuestionQueue([]);
         }
       } catch (err: any) {
         console.error("Error initializing adaptive session:", err);
@@ -240,7 +245,9 @@ export default function SkillPractice() {
   // API helpers
   // ----------------------------------------------------
 
-  const getNextQuestion = async (wasLastCorrect: boolean) => {
+  const getNextQuestion = async (
+    wasLastCorrect: boolean
+  ): Promise<{ question: Question | null; difficulty: number | null }> => {
     try {
       const params = new URLSearchParams({
         lastCorrect: wasLastCorrect.toString(),
@@ -255,29 +262,19 @@ export default function SkillPractice() {
       if (response.ok) {
         const data = await response.json();
         if (data.question) {
-          setCurrentQuestion(data.question);
-          setCurrentDifficulty(data.difficulty_level);
-          return true;
+          return {
+            question: data.question as Question,
+            difficulty:
+              typeof data.difficulty_level === "number"
+                ? data.difficulty_level
+                : currentDifficulty,
+          };
         }
       }
-      return false;
+      return { question: null, difficulty: null };
     } catch (err) {
       console.error("Error getting next question:", err);
-      return false;
-    }
-  };
-
-  const checkMasteryStatus = async (): Promise<boolean> => {
-    try {
-      const response = await fetch(`/api/skills/${skillId}/mastery-status`);
-      if (response.ok) {
-        const data = await response.json();
-        return Boolean(data.mastered);
-      }
-      return false;
-    } catch (err) {
-      console.error("Error checking mastery status:", err);
-      return false;
+      return { question: null, difficulty: null };
     }
   };
 
@@ -305,6 +302,7 @@ export default function SkillPractice() {
 
     setIsCorrect(correct);
     setShowFeedback(true);
+    setReadyForNext(false);
 
     // Update session stats
     const newQuestionsAnswered = questionsAnswered + 1;
@@ -325,6 +323,7 @@ export default function SkillPractice() {
       smartScoreChange = -Math.max(1, 6 - currentDifficulty);
     }
 
+    const masteryThreshold = skill.mastery_threshold || 100;
     const newSmartScore = Math.max(
       0,
       Math.min(100, (progress.smart_score || 0) + smartScoreChange)
@@ -332,13 +331,14 @@ export default function SkillPractice() {
     const newQuestionsAttempted = (progress.questions_attempted || 0) + 1;
     const newQuestionsCorrect =
       (progress.questions_correct || 0) + (correct ? 1 : 0);
+    const achievedMastery = newSmartScore >= masteryThreshold;
 
     const newProgress: Progress = {
       smart_score: newSmartScore,
       questions_attempted: newQuestionsAttempted,
       questions_correct: newQuestionsCorrect,
       current_streak: newConsecutiveCorrect,
-      is_mastered: newSmartScore >= 100,
+      is_mastered: achievedMastery,
     };
     setProgress(newProgress);
 
@@ -352,51 +352,70 @@ export default function SkillPractice() {
           questions_attempted: newQuestionsAttempted,
           questions_correct: newQuestionsCorrect,
           current_streak: newConsecutiveCorrect,
-          is_mastered: false,
+          is_mastered: achievedMastery,
           time_spent_seconds: 60,
         }),
       });
 
-      // Check mastery
-      const hasMastered = await checkMasteryStatus();
-      if (hasMastered) {
-        await fetch(`/api/skills/${skillId}/progress`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            smart_score: 100,
-            questions_attempted: newQuestionsAttempted,
-            questions_correct: newQuestionsCorrect,
-            current_streak: newConsecutiveCorrect,
-            is_mastered: true,
-            time_spent_seconds: 60,
-          }),
-        });
-        setMasteryProgress(100);
-        setSessionCompleted(true);
-        return;
-      }
-
       // Update mastery progress (approximation)
-      const masteryThreshold = skill.mastery_threshold || 80;
       const masteryPercent = Math.min(
         100,
         Math.round((newSmartScore / masteryThreshold) * 100)
       );
       setMasteryProgress(masteryPercent);
+
+      if (achievedMastery) {
+        setSessionCompleted(true);
+        return;
+      }
     } catch (err) {
       console.error("Error saving progress:", err);
       // non-fatal
     }
 
-    // Ask backend for next question
-    const gotNextQuestion = await getNextQuestion(correct);
+    // Allow the user to move to the next question after reviewing feedback.
+    setReadyForNext(true);
+  };
 
-    if (gotNextQuestion) {
+  const handleNextQuestion = async () => {
+    if (!showFeedback || !readyForNext) return;
+
+    setReadyForNext(false);
+    const result = await getNextQuestion(isCorrect);
+
+    let nextQuestion = result.question;
+    let nextDifficulty =
+      typeof result.difficulty === "number"
+        ? result.difficulty
+        : nextQuestion?.difficulty_rating || currentDifficulty;
+
+    // If backend returned nothing or the same question, fall back to queued items from initial fetch.
+    if (
+      (!nextQuestion ||
+        (currentQuestion && nextQuestion.id === currentQuestion.id)) &&
+      questionQueue.length > 0
+    ) {
+      nextQuestion = questionQueue[0];
+      nextDifficulty =
+        questionQueue[0].difficulty_rating || nextDifficulty || currentDifficulty;
+      setQuestionQueue((prev) => prev.slice(1));
+    } else if (nextQuestion) {
+      // If we consumed a backend question, also shift the queue if it was from the queue list.
+      setQuestionQueue((prev) =>
+        prev.length > 0 && prev[0].id === nextQuestion?.id
+          ? prev.slice(1)
+          : prev
+      );
+    }
+
+    if (nextQuestion) {
+      setCurrentQuestion(nextQuestion);
+      setCurrentDifficulty(nextDifficulty || currentDifficulty);
       setSelectedAnswer(null);
       setShowFeedback(false);
       setIsCorrect(false);
       setShowHint(false);
+      setReadyForNext(false);
     } else {
       setSessionCompleted(true);
     }
@@ -424,18 +443,18 @@ export default function SkillPractice() {
             <Trophy className="h-10 w-10 text-white" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold text-slate-50">
-            {masteryProgress >= 100 ? "Skill mastered! 🎉" : "Session complete"}
+            {masteryProgress >= 100 ? "Skill mastered!" : "Session complete"}
           </h1>
           <p className="text-sm sm:text-base text-slate-300 max-w-md">
             {masteryProgress >= 100
-              ? "You’ve reached the mastery threshold for this skill. Amazing work!"
-              : "You’ve finished this practice session. Review your stats and jump back in whenever you’re ready."}
+              ? "You have reached the mastery threshold for this skill. Amazing work!"
+              : "You have finished this practice session. Review your stats and jump back in whenever you are ready."}
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <StatGlass
-            label="SmartScore"
+            label="SmtScore"
             value={progress?.smart_score ?? 0}
             suffix="/100"
             icon={Star}
@@ -477,9 +496,8 @@ export default function SkillPractice() {
         {!skill ? "Skill not found" : "No questions available"}
       </h2>
       <p className="text-sm text-slate-300 max-w-md mx-auto">
-        {!skill
-          ? "We couldn’t find this skill. It may have been removed or is still being set up."
-          : "This skill doesn’t have any practice questions yet. Check back soon or choose another skill."}
+        {!skill ? "We could not find this skill. It may have been removed or is still being set up."
+          : "This skill does not have any practice questions yet. Check back soon or choose another skill."}
       </p>
       <GlassButton
         variant="secondary"
@@ -581,13 +599,23 @@ export default function SkillPractice() {
 
           {/* Feedback + actions */}
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <GlassButton
-              size="sm"
-              onClick={handleSubmit}
-              disabled={!selectedAnswer || showFeedback}
-            >
-              Check answer
-            </GlassButton>
+            {showFeedback ? (
+              <GlassButton
+                size="sm"
+                onClick={handleNextQuestion}
+                disabled={!readyForNext}
+              >
+                Next question
+              </GlassButton>
+            ) : (
+              <GlassButton
+                size="sm"
+                onClick={handleSubmit}
+                disabled={!selectedAnswer || showFeedback}
+              >
+                Check answer
+              </GlassButton>
+            )}
 
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <Clock className="h-3.5 w-3.5" />
@@ -597,7 +625,7 @@ export default function SkillPractice() {
                   {progress?.smart_score ?? 0}
                 </span>
               </span>
-              <span className="opacity-60">•</span>
+              <span className="opacity-60">-</span>
               <span>Streak: {consecutiveCorrect}</span>
             </div>
           </div>
@@ -616,9 +644,9 @@ export default function SkillPractice() {
                       isCorrect ? "text-emerald-100" : "text-rose-100"
                     }`}
                   >
-                    {isCorrect ? "Correct! 🎉" : "Not quite right"}
+                    {isCorrect ? "Correct!" : "Not quite right"}
                     {isCorrect && consecutiveCorrect >= 2 && (
-                      <> • {consecutiveCorrect}x streak!</>
+                      <> - {consecutiveCorrect}x streak!</>
                     )}
                   </p>
                   <p className="mt-2 text-xs sm:text-sm text-slate-100">
@@ -682,7 +710,7 @@ export default function SkillPractice() {
                           progress.questions_attempted) *
                           100
                       )}%`
-                    : "—"
+                    : "0%"
                 }
                 icon={Target}
               />

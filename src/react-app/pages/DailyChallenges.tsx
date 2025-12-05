@@ -13,14 +13,15 @@ import {
 import { AppLayout } from "@/react-app/components/layout/AppLayout";
 import { GlassCard } from "@/react-app/components/ui/GlassCard";
 import { GlassButton } from "@/react-app/components/ui/GlassButton";
+import api from "@/react-app/services/api";
 
 /* ----------------------------------------------------------
    Types
 ---------------------------------------------------------- */
 
 interface ChallengeBase {
-  id: number;
-  skill_id: number;
+  id: string;
+  skill_id: string;
   skill_name: string;
   subject_name: string;
   questions_required: number;
@@ -32,8 +33,8 @@ interface ChallengeBase {
 interface ChallengeProgress {
   questions_completed: number;
   questions_correct: number;
-  is_completed: boolean;
-  completed_at: string | null;
+  is_completed?: boolean;
+  completed_at?: string | null;
 }
 
 type ChallengeWithProgress = ChallengeBase & ChallengeProgress;
@@ -50,46 +51,25 @@ interface ChallengeStats {
 // Soft: never throws. Returns null when anything goes wrong.
 async function fetchTodayChallenge(): Promise<ChallengeWithProgress | null> {
   try {
-    const res = await fetch("/api/daily-challenges/today");
-
-    if (res.status === 404) {
-      // No challenge for today
-      return null;
-    }
-
-    if (!res.ok) {
-      console.warn(
-        "fetchTodayChallenge: non-OK status, treating as no challenge:",
-        res.status
-      );
-      return null;
-    }
-
-    const data = await res.json();
-    return data as ChallengeWithProgress;
-  } catch (err) {
-    console.warn("fetchTodayChallenge failed, treating as no challenge:", err);
+    const res = await api.get<ChallengeWithProgress>("/daily-challenges/today");
+    return res.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) return null;
+    console.warn("fetchTodayChallenge failed:", err);
     return null;
   }
 }
 
-// Already soft: returns [] if anything fails.
 async function fetchChallengeHistory(
   limit = 10
 ): Promise<ChallengeWithProgress[]> {
   try {
-    const res = await fetch(`/api/daily-challenges/history?limit=${limit}`);
-    if (!res.ok) {
-      console.warn(
-        "fetchChallengeHistory: non-OK, treating as empty history:",
-        res.status
-      );
-      return [];
-    }
-    const data = await res.json();
-    return data as ChallengeWithProgress[];
+    const res = await api.get<ChallengeWithProgress[]>(
+      `/daily-challenges/history?limit=${limit}`
+    );
+    return res.data;
   } catch (err) {
-    console.warn("fetchChallengeHistory failed, treating as empty:", err);
+    console.warn("fetchChallengeHistory failed:", err);
     return [];
   }
 }
@@ -97,31 +77,18 @@ async function fetchChallengeHistory(
 // Soft: returns default stats if anything fails.
 async function fetchChallengeStats(): Promise<ChallengeStats> {
   try {
-    const res = await fetch("/api/daily-challenges/stats");
-    if (!res.ok) {
-      console.warn(
-        "fetchChallengeStats: non-OK, using default stats:",
-        res.status
-      );
-      return { total_completed: 0, current_streak: 0 };
-    }
-    const data = await res.json();
-    return data as ChallengeStats;
+    const res = await api.get<ChallengeStats>("/daily-challenges/stats");
+    return res.data;
   } catch (err) {
-    console.warn("fetchChallengeStats failed, using default stats:", err);
+    console.warn("fetchChallengeStats failed:", err);
     return { total_completed: 0, current_streak: 0 };
   }
 }
 
-async function claimChallengeXp(challengeId: number): Promise<void> {
-  const res = await fetch(`/api/daily-challenges/${challengeId}/claim-xp`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(
-      body || `Failed to claim XP (status ${res.status.toString()})`
-    );
+async function claimChallengeXp(challengeId: string): Promise<void> {
+  const res = await api.post(`/daily-challenges/${challengeId}/claim-xp`);
+  if (res.status >= 400) {
+    throw new Error(`Failed to claim XP (status ${res.status})`);
   }
 }
 
@@ -140,12 +107,10 @@ export default function DailyChallenges() {
   const [error, setError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-
-      // None of these throw anymore
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
       const [today, hist, s] = await Promise.all([
         fetchTodayChallenge(),
         fetchChallengeHistory(10),
@@ -155,10 +120,19 @@ export default function DailyChallenges() {
       setTodayChallenge(today);
       setHistory(hist);
       setStats(s);
+    } catch (err: any) {
+      console.error("Failed to load daily challenges", err);
+      setError(
+        err?.message ||
+          "We couldn't load your daily challenges. Make sure you are signed in."
+      );
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    void load();
+  useEffect(() => {
+    void loadData();
   }, []);
 
   const handleStartPractice = () => {
@@ -205,6 +179,11 @@ export default function DailyChallenges() {
       description="A focused challenge each day to keep your streak alive and earn bonus XP."
       loading={loading}
       error={error}
+      actions={
+        <GlassButton size="sm" variant="secondary" onClick={loadData}>
+          Refresh
+        </GlassButton>
+      }
     >
       {!loading && (
         <div className="space-y-6">
@@ -258,7 +237,7 @@ export default function DailyChallenges() {
                     Time suggestion
                   </p>
                   <p className="mt-1 text-lg font-semibold text-white">
-                    15–20 min
+                    15-20 min
                   </p>
                   <p className="text-[11px] text-slate-400">
                     Best done in one focused block
@@ -269,7 +248,7 @@ export default function DailyChallenges() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)]">
-            {/* Today’s challenge */}
+            {/* Today's challenge */}
             <div className="space-y-4">
               <GlassCard className="p-5 sm:p-6">
                 <div className="mb-4 flex items-start justify-between gap-3">
@@ -359,7 +338,7 @@ export default function DailyChallenges() {
                           <span className="font-semibold text-slate-50">
                             {todayAccuracy.toFixed(1)}%
                           </span>{" "}
-                          · Target:{" "}
+                          - Target:{" "}
                           <span className="font-semibold">
                             {todayChallenge.accuracy_required}%
                           </span>
@@ -493,7 +472,7 @@ function RecentChallengeCard({ challenge }: { challenge: ChallengeWithProgress }
               {challenge.skill_name}
             </h4>
             <p className="text-xs text-slate-400">
-              {challenge.subject_name} • {challenge.challenge_date}
+              {challenge.subject_name} - {challenge.challenge_date}
             </p>
           </div>
         </div>
@@ -504,8 +483,7 @@ function RecentChallengeCard({ challenge }: { challenge: ChallengeWithProgress }
       </div>
       <div className="flex items-center justify-between text-xs text-slate-300">
         <span>
-          {challenge.questions_completed}/{challenge.questions_required} Q •{" "}
-          {accuracy}% accuracy
+          {challenge.questions_completed}/{challenge.questions_required} Q - {accuracy}% accuracy
         </span>
         <span className={met ? "text-emerald-300" : "text-amber-200"}>
           {met ? "Completed" : "Incomplete"}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { useAuth } from "@getmocha/users-service/react";
+import { useAuth } from "@/react-app/auth/ApiAuth";
 import { BookOpen, ChevronRight, Target } from "lucide-react";
 import Navigation from "@/react-app/components/Navigation";
 import ProgressRing from "@/react-app/components/ProgressRing";

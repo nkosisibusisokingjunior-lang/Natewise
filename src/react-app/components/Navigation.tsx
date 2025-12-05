@@ -2,7 +2,6 @@
 import { useNavigate, useLocation } from "react-router";
 import { BookOpen, LayoutDashboard, Library, LogOut, User, Menu } from "lucide-react";
 import { useState } from "react";
-import type { MochaUser } from "@getmocha/users-service/shared";
 
 
 
@@ -12,7 +11,16 @@ import type { MochaUser } from "@getmocha/users-service/shared";
 
 interface NavigationProps {
   onLogout: () => void;
-  user: MochaUser;
+  user: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    google_user_data?: {
+      picture?: string;
+      name?: string;
+      given_name?: string;
+    };
+  };
 }
 
 export default function Navigation({ onLogout, user }: NavigationProps) {
@@ -121,7 +129,7 @@ export default function Navigation({ onLogout, user }: NavigationProps) {
           {/* User Menu */}
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
-              {user.google_user_data.picture ? (
+              {user.google_user_data?.picture ? (
                 <img
                   src={user.google_user_data.picture}
                   alt={user.google_user_data.name || "User"}
@@ -133,7 +141,7 @@ export default function Navigation({ onLogout, user }: NavigationProps) {
                 </div>
               )}
               <span className="text-sm font-medium text-gray-900">
-                {user.google_user_data.given_name || user.email}
+                {user.firstName || user.google_user_data?.given_name || user.email}
               </span>
             </div>
             

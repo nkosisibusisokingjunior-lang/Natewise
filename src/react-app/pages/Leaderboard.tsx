@@ -1,9 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { useAuth } from "@getmocha/users-service/react";
+import { useAuth } from "@/react-app/auth/ApiAuth";
 import { Zap, Medal, Crown } from "lucide-react";
 import Navigation from "@/react-app/components/Navigation";
-import type { MochaUser } from "@getmocha/users-service/shared";
+
+type SimpleUser = {
+  id: string;
+  email?: string;
+  google_user_data?: {
+    given_name?: string;
+    name?: string;
+    picture?: string;
+    email?: string;
+    email_verified?: boolean;
+    sub?: string;
+  };
+};
 
 interface LeaderboardEntry {
   rank: number;
@@ -21,20 +33,16 @@ interface LeaderboardData {
 }
 
 // --- 1. MOCK USER ---
-const MOCK_USER: MochaUser = {
+const MOCK_USER: SimpleUser = {
   id: "dev-user",
   email: "sibusiso@example.com",
-  google_sub: "dev-google-sub",
-  last_signed_in_at: new Date().toISOString(),
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
   google_user_data: {
     given_name: "Sibusiso King-Junior",
     name: "Sibusiso King-Junior Nkosi",
-    picture: null,
+    picture: undefined,
     email: "sibusiso@example.com",
     email_verified: true,
-    sub: "dev-google-sub"
+    sub: "dev-google-sub",
   }
 };
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 interface Subject {
-  id: number;
+  id: string;
   name: string;
   code: string;
   nated_level: string;
@@ -10,34 +10,34 @@ interface Subject {
 }
 
 interface Module {
-  id: number;
-  subject_id: number;
+  id: string;
+  subject_id: string;
   name: string;
   description: string;
   topics?: Topic[];
 }
 
 interface Topic {
-  id: number;
-  module_id: number;
+  id: string;
+  module_id: string;
   name: string;
   description: string;
   skills?: Skill[];
 }
 
 interface Skill {
-  id: number;
-  topic_id: number;
+  id: string;
+  topic_id: string;
   name: string;
   description: string;
   questions?: Question[];
 }
 
 interface Question {
-  id: number;
-  skill_id: number;
+  id: string;
+  skill_id: string;
   question_text: string;
-  question_data: string;
+  question_data: any;
   correct_answer: string;
   explanation: string;
   difficulty_rating: number;
@@ -46,94 +46,81 @@ interface Question {
 
 export default function AdminContentManager() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [expandedSubjects, setExpandedSubjects] = useState<number[]>([]);
-  const [expandedModules, setExpandedModules] = useState<number[]>([]);
-  const [expandedTopics, setExpandedTopics] = useState<number[]>([]);
-  const [expandedSkills, setExpandedSkills] = useState<number[]>([]);
+  const [expandedSubjects, setExpandedSubjects] = useState<string[]>([]);
+  const [expandedModules, setExpandedModules] = useState<string[]>([]);
+  const [expandedTopics, setExpandedTopics] = useState<string[]>([]);
+  const [expandedSkills, setExpandedSkills] = useState<string[]>([]);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [questionOptions, setQuestionOptions] = useState<string[]>(['', '', '', '']);
   const [correctAnswerIndex, setCorrectAnswerIndex] = useState<number>(0);
   const [difficultyRating, setDifficultyRating] = useState<number>(1);
   const [pointsValue, setPointsValue] = useState<number>(10);
+  const [questionImageUrl, setQuestionImageUrl] = useState<string>("");
+  const [questionMermaid, setQuestionMermaid] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  const isEditing = Boolean(editingItem?.data);
 
   // Fetch all data with full hierarchy
   const fetchFullHierarchy = async () => {
     try {
       setLoading(true);
-      console.log("Fetching full hierarchy...");
+      console.log("Fetching subjects and modules...");
       
-      // Fetch subjects
-      const subjectsResponse = await fetch("/api/subjects");
+      const subjectsResponse = await fetch("/api/v1/subjects");
       const subjectsData = await subjectsResponse.json();
-      console.log("Subjects:", subjectsData);
 
-      // For each subject, fetch modules, topics, skills, and questions
-      const subjectsWithFullData = await Promise.all(
+      const subjectsWithModules = await Promise.all(
         subjectsData.map(async (subject: Subject) => {
           try {
-            // Fetch modules for this subject
-            const modulesResponse = await fetch(`/api/subjects/${subject.id}`);
-            const subjectWithModules = await modulesResponse.json();
-            
-            // If modules exist, fetch topics for each module
-            if (subjectWithModules.modules) {
-              const modulesWithTopics = await Promise.all(
-                subjectWithModules.modules.map(async (module: Module) => {
-                  try {
-                    // Fetch topics for this module
-                    const topicsResponse = await fetch(`/api/modules/${module.id}`);
-                    const moduleWithTopics = await topicsResponse.json();
-                    
-                    // If topics exist, fetch skills for each topic
-                    if (moduleWithTopics.topics) {
-                      const topicsWithSkills = await Promise.all(
-                        moduleWithTopics.topics.map(async (topic: Topic) => {
-                          try {
-                            // Fetch skills for this topic
-                            const skillsResponse = await fetch(`/api/topics/${topic.id}/skills`);
-                            const skillsData = await skillsResponse.json();
-                            
-                            // If skills exist, fetch questions for each skill
-                            if (skillsData && skillsData.length > 0) {
-                              const skillsWithQuestions = await Promise.all(
-                                skillsData.map(async (skill: Skill) => {
-                                  try {
-                                    // Fetch questions for this skill
-                                    const questionsResponse = await fetch(`/api/skills/${skill.id}/questions`);
-                                    const questionsData = await questionsResponse.json();
-                                    return {
-                                      ...skill,
-                                      questions: questionsData || []
-                                    };
-                                  } catch (error) {
-                                    console.error(`Error fetching questions for skill ${skill.id}:`, error);
-                                    return { ...skill, questions: [] };
-                                  }
-                                })
+            const modulesResponse = await fetch(`/api/v1/modules?subjectId=${subject.id}`);
+            const modulesData = await modulesResponse.json();
+
+            const modulesWithTopics = await Promise.all(
+              (modulesData || []).map(async (module: Module) => {
+                try {
+                  const topicsResponse = await fetch(`/api/v1/topics?moduleId=${module.id}`);
+                  const topicsData = await topicsResponse.json();
+
+                  const topicsWithSkills = await Promise.all(
+                    (topicsData || []).map(async (topic: Topic) => {
+                      try {
+                        const skillsResponse = await fetch(`/api/v1/skills?topicId=${topic.id}`);
+                        const skillsData = await skillsResponse.json();
+
+                        const skillsWithQuestions = await Promise.all(
+                          (skillsData || []).map(async (skill: Skill) => {
+                            try {
+                              const questionsResponse = await fetch(
+                                `/api/v1/skills/${skill.id}/questions`
                               );
-                              return { ...topic, skills: skillsWithQuestions };
+                              const questionsData = await questionsResponse.json();
+                              return { ...skill, questions: questionsData || [] };
+                            } catch (error) {
+                              console.error(`Error fetching questions for skill ${skill.id}:`, error);
+                              return { ...skill, questions: [] };
                             }
-                            return { ...topic, skills: [] };
-                          } catch (error) {
-                            console.error(`Error fetching skills for topic ${topic.id}:`, error);
-                            return { ...topic, skills: [] };
-                          }
-                        })
-                      );
-                      return { ...module, topics: topicsWithSkills };
-                    }
-                    return { ...module, topics: [] };
-                  } catch (error) {
-                    console.error(`Error fetching topics for module ${module.id}:`, error);
-                    return { ...module, topics: [] };
-                  }
-                })
-              );
-              return { ...subject, modules: modulesWithTopics };
-            }
-            return { ...subject, modules: [] };
+                          })
+                        );
+
+                        return { ...topic, skills: skillsWithQuestions };
+                      } catch (error) {
+                        console.error(`Error fetching skills for topic ${topic.id}:`, error);
+                        return { ...topic, skills: [] };
+                      }
+                    })
+                  );
+
+                  return { ...module, topics: topicsWithSkills };
+                } catch (error) {
+                  console.error(`Error fetching topics for module ${module.id}:`, error);
+                  return { ...module, topics: [] };
+                }
+              })
+            );
+
+            return { ...subject, modules: modulesWithTopics };
           } catch (error) {
             console.error(`Error fetching modules for subject ${subject.id}:`, error);
             return { ...subject, modules: [] };
@@ -141,10 +128,9 @@ export default function AdminContentManager() {
         })
       );
 
-      console.log("Full hierarchy data:", subjectsWithFullData);
-      setSubjects(subjectsWithFullData);
+      setSubjects(subjectsWithModules);
     } catch (error) {
-      console.error("Failed to fetch full hierarchy:", error);
+      console.error("Failed to fetch content:", error);
     } finally {
       setLoading(false);
     }
@@ -154,13 +140,35 @@ export default function AdminContentManager() {
     fetchFullHierarchy();
   }, []);
 
+  // When editing a question, preload form fields
+  useEffect(() => {
+    if (editingItem?.type === "question") {
+      const qData = parseQuestionData(editingItem.data?.question_data || {});
+      const opts = qData.options || [];
+      setQuestionOptions([
+        opts[0] || "",
+        opts[1] || "",
+        opts[2] || "",
+        opts[3] || "",
+      ]);
+      const correctIdx = opts.findIndex((o: string) => o === editingItem.data?.correct_answer);
+      setCorrectAnswerIndex(correctIdx >= 0 ? correctIdx : 0);
+      setDifficultyRating(editingItem.data?.difficulty_rating || 1);
+      setPointsValue(editingItem.data?.points_value || 10);
+      setQuestionImageUrl(qData.image_url || "");
+      setQuestionMermaid(qData.mermaid || "");
+    } else if (!editingItem) {
+      resetQuestionForm();
+    }
+  }, [editingItem]);
+
   // Refresh data after any operation
   const refreshData = () => {
     fetchFullHierarchy();
   };
 
   // Toggle expansion functions
-  const toggleSubject = (subjectId: number) => {
+  const toggleSubject = (subjectId: string) => {
     setExpandedSubjects(prev => 
       prev.includes(subjectId) 
         ? prev.filter(id => id !== subjectId)
@@ -168,7 +176,7 @@ export default function AdminContentManager() {
     );
   };
 
-  const toggleModule = (moduleId: number) => {
+  const toggleModule = (moduleId: string) => {
     setExpandedModules(prev => 
       prev.includes(moduleId) 
         ? prev.filter(id => id !== moduleId)
@@ -176,7 +184,7 @@ export default function AdminContentManager() {
     );
   };
 
-  const toggleTopic = (topicId: number) => {
+  const toggleTopic = (topicId: string) => {
     setExpandedTopics(prev => 
       prev.includes(topicId) 
         ? prev.filter(id => id !== topicId)
@@ -184,7 +192,7 @@ export default function AdminContentManager() {
     );
   };
 
-  const toggleSkill = (skillId: number) => {
+  const toggleSkill = (skillId: string) => {
     setExpandedSkills(prev => 
       prev.includes(skillId) 
         ? prev.filter(id => id !== skillId)
@@ -194,7 +202,7 @@ export default function AdminContentManager() {
 
   // Create functions
   const createSubject = async (data: any) => {
-    await fetch("/api/subjects", {
+    await fetch("/api/v1/subjects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
@@ -202,8 +210,17 @@ export default function AdminContentManager() {
     refreshData();
   };
 
-  const createModule = async (subjectId: number, data: any) => {
-    await fetch("/api/modules", {
+  const updateSubject = async (id: string, data: any) => {
+    await fetch(`/api/v1/subjects/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    refreshData();
+  };
+
+  const createModule = async (subjectId: string, data: any) => {
+    await fetch("/api/v1/modules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...data, subject_id: subjectId })
@@ -211,8 +228,17 @@ export default function AdminContentManager() {
     refreshData();
   };
 
-  const createTopic = async (moduleId: number, data: any) => {
-    await fetch("/api/topics", {
+  const updateModule = async (id: string, data: any) => {
+    await fetch(`/api/v1/modules/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    refreshData();
+  };
+
+  const createTopic = async (moduleId: string, data: any) => {
+    await fetch("/api/v1/topics", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...data, module_id: moduleId })
@@ -220,8 +246,17 @@ export default function AdminContentManager() {
     refreshData();
   };
 
-  const createSkill = async (topicId: number, data: any) => {
-    await fetch("/api/skills", {
+  const updateTopic = async (id: string, data: any) => {
+    await fetch(`/api/v1/topics/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    refreshData();
+  };
+
+  const createSkill = async (topicId: string, data: any) => {
+    await fetch("/api/v1/skills", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...data, topic_id: topicId })
@@ -229,11 +264,20 @@ export default function AdminContentManager() {
     refreshData();
   };
 
-  const createQuestion = async (skillId: number, data: any) => {
+  const updateSkill = async (id: string, data: any) => {
+    await fetch(`/api/v1/skills/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    refreshData();
+  };
+
+  const createQuestion = async (skillId: string, data: any) => {
     try {
       console.log("Creating question for skill:", skillId, "with data:", data);
       
-      const response = await fetch("/api/questions", {
+      const response = await fetch("/api/v1/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -260,38 +304,50 @@ export default function AdminContentManager() {
     }
   };
 
+  const updateQuestion = async (id: string, data: any) => {
+    const response = await fetch(`/api/v1/questions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    refreshData();
+  };
+
   // Delete functions
-  const deleteSubject = async (subjectId: number) => {
+  const deleteSubject = async (subjectId: string) => {
     if (confirm("Are you sure you want to delete this subject?")) {
-      await fetch(`/api/subjects/${subjectId}`, { method: "DELETE" });
+      await fetch(`/api/v1/subjects/${subjectId}`, { method: "DELETE" });
       refreshData();
     }
   };
 
-  const deleteModule = async (moduleId: number) => {
+  const deleteModule = async (moduleId: string) => {
     if (confirm("Are you sure you want to delete this module?")) {
-      await fetch(`/api/modules/${moduleId}`, { method: "DELETE" });
+      await fetch(`/api/v1/modules/${moduleId}`, { method: "DELETE" });
       refreshData();
     }
   };
 
-  const deleteTopic = async (topicId: number) => {
+  const deleteTopic = async (topicId: string) => {
     if (confirm("Are you sure you want to delete this topic?")) {
-      await fetch(`/api/topics/${topicId}`, { method: "DELETE" });
+      await fetch(`/api/v1/topics/${topicId}`, { method: "DELETE" });
       refreshData();
     }
   };
 
-  const deleteSkill = async (skillId: number) => {
+  const deleteSkill = async (skillId: string) => {
     if (confirm("Are you sure you want to delete this skill?")) {
-      await fetch(`/api/skills/${skillId}`, { method: "DELETE" });
+      await fetch(`/api/v1/skills/${skillId}`, { method: "DELETE" });
       refreshData();
     }
   };
 
-  const deleteQuestion = async (questionId: number) => {
+  const deleteQuestion = async (questionId: string) => {
     if (confirm("Are you sure you want to delete this question?")) {
-      await fetch(`/api/questions/${questionId}`, { method: "DELETE" });
+      await fetch(`/api/v1/questions/${questionId}`, { method: "DELETE" });
       refreshData();
     }
   };
@@ -308,6 +364,8 @@ export default function AdminContentManager() {
     setCorrectAnswerIndex(0);
     setDifficultyRating(1);
     setPointsValue(10);
+    setQuestionImageUrl("");
+    setQuestionMermaid("");
   };
 
   // Handle option change
@@ -318,9 +376,12 @@ export default function AdminContentManager() {
   };
 
   // Parse question data safely
-  const parseQuestionData = (questionData: string) => {
+  const parseQuestionData = (questionData: any) => {
+    if (questionData && typeof questionData === "object") {
+      return questionData;
+    }
     try {
-      return JSON.parse(questionData);
+      return JSON.parse(questionData as string);
     } catch {
       return { options: [] };
     }
@@ -385,6 +446,15 @@ export default function AdminContentManager() {
                   >
                     + Module
                   </button>
+                  <button
+                    onClick={() => {
+                      setEditingItem({ type: "subject", data: subject });
+                      setShowModal(true);
+                    }}
+                    className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                  >
+                    Edit
+                  </button>
                   <button 
                     onClick={() => deleteSubject(subject.id)}
                     className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
@@ -418,6 +488,15 @@ export default function AdminContentManager() {
                               className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
                             >
                               + Topic
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingItem({ type: "module", parentId: subject.id, data: module });
+                                setShowModal(true);
+                              }}
+                              className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                            >
+                              Edit
                             </button>
                             <button 
                               onClick={() => deleteModule(module.id)}
@@ -453,14 +532,23 @@ export default function AdminContentManager() {
                                       >
                                         + Skill
                                       </button>
-                                      <button 
-                                        onClick={() => deleteTopic(topic.id)}
-                                        className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
-                                  </div>
+                                          <button 
+                                            onClick={() => {
+                                              setEditingItem({ type: "topic", parentId: module.id, data: topic });
+                                              setShowModal(true);
+                                            }}
+                                            className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                                          >
+                                            Edit
+                                          </button>
+                                          <button 
+                                            onClick={() => deleteTopic(topic.id)}
+                                            className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+                                          >
+                                            Delete
+                                          </button>
+                                        </div>
+                                      </div>
 
                                   {expandedTopics.includes(topic.id) && (
                                     <div className="mt-2 ml-4 space-y-2">
@@ -491,12 +579,21 @@ export default function AdminContentManager() {
                                                 >
                                                   + Question
                                                 </button>
-                                                <button 
-                                                  onClick={() => deleteSkill(skill.id)}
-                                                  className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
-                                                >
-                                                  Delete
-                                                </button>
+                                          <button 
+                                            onClick={() => {
+                                              setEditingItem({ type: "skill", parentId: topic.id, data: skill });
+                                              setShowModal(true);
+                                            }}
+                                            className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                                          >
+                                            Edit
+                                          </button>
+                                          <button 
+                                            onClick={() => deleteSkill(skill.id)}
+                                            className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+                                          >
+                                            Delete
+                                          </button>
                                               </div>
                                             </div>
 
@@ -506,23 +603,45 @@ export default function AdminContentManager() {
                                                   skill.questions.map(question => {
                                                     const questionData = parseQuestionData(question.question_data);
                                                     
-                                                    return (
-                                                      <div key={question.id} className="bg-gray-50 p-3 rounded border">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                          <div className="font-medium text-sm flex-1">
-                                                            {question.question_text}
+                                                   return (
+                                                     <div key={question.id} className="bg-gray-50 p-3 rounded border">
+                                                       <div className="flex justify-between items-start mb-2">
+                                                         <div className="font-medium text-sm flex-1">
+                                                           {question.question_text}
+                                                         </div>
+                                                          <div className="flex gap-2">
+                                                            <button 
+                                                              onClick={() => {
+                                                                const opts = questionData.options || [];
+                                                                setQuestionOptions([
+                                                                  opts[0] || "",
+                                                                  opts[1] || "",
+                                                                  opts[2] || "",
+                                                                  opts[3] || "",
+                                                                ]);
+                                                                const correctIdx = opts.findIndex((o: string) => o === question.correct_answer);
+                                                                setCorrectAnswerIndex(correctIdx >= 0 ? correctIdx : 0);
+                                                                setDifficultyRating(question.difficulty_rating || 1);
+                                                                setPointsValue(question.points_value || 0);
+                                                                setEditingItem({ type: "question", parentId: skill.id, data: question });
+                                                                setShowModal(true);
+                                                              }}
+                                                              className="ml-2 text-blue-500 hover:text-blue-700 text-xs"
+                                                            >
+                                                              Edit
+                                                            </button>
+                                                            <button 
+                                                              onClick={() => deleteQuestion(question.id)}
+                                                              className="ml-2 text-red-500 hover:text-red-700 text-xs"
+                                                            >
+                                                              Delete
+                                                            </button>
                                                           </div>
-                                                          <button 
-                                                            onClick={() => deleteQuestion(question.id)}
-                                                            className="ml-2 text-red-500 hover:text-red-700 text-xs"
-                                                          >
-                                                            Delete
-                                                          </button>
-                                                        </div>
-                                                        <div className="text-xs text-gray-600 space-y-1 mb-2">
-                                                          <div><strong>Options:</strong></div>
-                                                          {questionData.options?.map((option: string, index: number) => (
-                                                            <div key={index} className="flex items-center gap-2">
+                                                       </div>
+                                                       <div className="text-xs text-gray-600 space-y-1 mb-2">
+                                                         <div><strong>Options:</strong></div>
+                                                         {questionData.options?.map((option: string, index: number) => (
+                                                           <div key={index} className="flex items-center gap-2">
                                                               <span>{String.fromCharCode(65 + index)}.</span>
                                                               <span className={option === question.correct_answer ? "text-green-600 font-medium" : ""}>
                                                                 {option}
@@ -586,9 +705,9 @@ export default function AdminContentManager() {
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg w-96 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold mb-4">
-              {editingItem?.data ? "Edit" : "Create"} {editingItem?.type}
-            </h3>
+              <h3 className="text-lg font-bold mb-4">
+                {editingItem?.data ? "Edit" : "Create"} {editingItem?.type}
+              </h3>
             
             <form onSubmit={async (e) => {
               e.preventDefault();
@@ -596,32 +715,51 @@ export default function AdminContentManager() {
 
               try {
                 if (editingItem?.type === "subject") {
-                  await createSubject({
+                  const payload = {
                     name: getFormStringValue(formData, "name"),
                     code: getFormStringValue(formData, "code"),
                     nated_level: getFormStringValue(formData, "nated_level"),
                     description: getFormStringValue(formData, "description"),
-                    color_hex: getFormStringValue(formData, "color_hex")
-                  });
+                    color_hex: getFormStringValue(formData, "color_hex"),
+                  };
+                  if (editingItem.data) {
+                    await updateSubject(editingItem.data.id, payload);
+                  } else {
+                    await createSubject(payload);
+                  }
                 } else if (editingItem?.type === "module") {
-                  await createModule(editingItem.parentId, {
+                  const payload = {
                     name: getFormStringValue(formData, "name"),
-                    description: getFormStringValue(formData, "description")
-                  });
+                    description: getFormStringValue(formData, "description"),
+                  };
+                  if (editingItem.data) {
+                    await updateModule(editingItem.data.id, payload);
+                  } else {
+                    await createModule(editingItem.parentId, payload);
+                  }
                 } else if (editingItem?.type === "topic") {
-                  await createTopic(editingItem.parentId, {
+                  const payload = {
                     name: getFormStringValue(formData, "name"),
-                    description: getFormStringValue(formData, "description")
-                  });
+                    description: getFormStringValue(formData, "description"),
+                  };
+                  if (editingItem.data) {
+                    await updateTopic(editingItem.data.id, payload);
+                  } else {
+                    await createTopic(editingItem.parentId, payload);
+                  }
                 } else if (editingItem?.type === "skill") {
-                  await createSkill(editingItem.parentId, {
+                  const payload = {
                     name: getFormStringValue(formData, "name"),
-                    description: getFormStringValue(formData, "description")
-                  });
+                    description: getFormStringValue(formData, "description"),
+                  };
+                  if (editingItem.data) {
+                    await updateSkill(editingItem.data.id, payload);
+                  } else {
+                    await createSkill(editingItem.parentId, payload);
+                  }
                 } else if (editingItem?.type === "question") {
-                  // For questions, use the state-based options
-                  const filteredOptions = questionOptions.filter(opt => opt.trim() !== "");
-                  
+                  const filteredOptions = questionOptions.filter((opt) => opt.trim() !== "");
+
                   if (filteredOptions.length < 2) {
                     alert("Please provide at least 2 options");
                     return;
@@ -631,50 +769,115 @@ export default function AdminContentManager() {
                     alert("Please select a valid correct answer");
                     return;
                   }
-                  
+
                   const correctAnswer = filteredOptions[correctAnswerIndex];
-                  
-                  await createQuestion(editingItem.parentId, {
-                    question_text: getFormStringValue(formData, "question_text"),
-                    question_data: { options: filteredOptions },
-                    correct_answer: correctAnswer,
-                    explanation: getFormStringValue(formData, "explanation"),
-                    difficulty_rating: difficultyRating,
-                    points_value: pointsValue
-                  });
+
+      const payload = {
+        question_text: getFormStringValue(formData, "question_text"),
+        question_data: {
+          options: filteredOptions,
+          image_url: questionImageUrl || undefined,
+          mermaid: questionMermaid || undefined,
+        },
+        correct_answer: correctAnswer,
+        explanation: getFormStringValue(formData, "explanation"),
+        difficulty_rating: difficultyRating,
+        points_value: pointsValue,
+      };
+
+                  if (editingItem.data) {
+                    await updateQuestion(editingItem.data.id, payload);
+                  } else {
+                    await createQuestion(editingItem.parentId, payload);
+                  }
                 }
-                
+
                 setShowModal(false);
                 setEditingItem(null);
               } catch (error) {
-                alert("Failed to create item: " + (error instanceof Error ? error.message : 'Unknown error'));
+                alert("Failed to save item: " + (error instanceof Error ? error.message : "Unknown error"));
                 console.error(error);
               }
             }}>
               {editingItem?.type === "subject" && (
                 <>
-                  <input name="name" placeholder="Subject Name" className="w-full border p-2 mb-2 rounded" required />
-                  <input name="code" placeholder="Code (e.g., MAT-N4)" className="w-full border p-2 mb-2 rounded" required />
-                  <input name="nated_level" placeholder="Level (e.g., N4)" className="w-full border p-2 mb-2 rounded" required />
-                  <textarea name="description" placeholder="Description" className="w-full border p-2 mb-2 rounded" />
-                  <input name="color_hex" placeholder="Color (#3B82F6)" className="w-full border p-2 mb-2 rounded" />
+                  <input
+                    name="name"
+                    defaultValue={editingItem?.data?.name || ""}
+                    placeholder="Subject Name"
+                    className="w-full border p-2 mb-2 rounded"
+                    required
+                  />
+                  <input
+                    name="code"
+                    defaultValue={editingItem?.data?.code || ""}
+                    placeholder="Code (e.g., MAT-N4)"
+                    className="w-full border p-2 mb-2 rounded"
+                    required
+                  />
+                  <input
+                    name="nated_level"
+                    defaultValue={editingItem?.data?.nated_level || ""}
+                    placeholder="Level (e.g., N4)"
+                    className="w-full border p-2 mb-2 rounded"
+                    required
+                  />
+                  <textarea
+                    name="description"
+                    defaultValue={editingItem?.data?.description || ""}
+                    placeholder="Description"
+                    className="w-full border p-2 mb-2 rounded"
+                  />
+                  <input
+                    name="color_hex"
+                    defaultValue={editingItem?.data?.color_hex || ""}
+                    placeholder="Color (#3B82F6)"
+                    className="w-full border p-2 mb-2 rounded"
+                  />
                 </>
               )}
 
               {(editingItem?.type === "module" || editingItem?.type === "topic" || editingItem?.type === "skill") && (
                 <>
-                  <input name="name" placeholder={`${editingItem.type} Name`} className="w-full border p-2 mb-2 rounded" required />
-                  <textarea name="description" placeholder="Description" className="w-full border p-2 mb-2 rounded" />
+                  <input
+                    name="name"
+                    defaultValue={editingItem?.data?.name || ""}
+                    placeholder={`${editingItem.type} Name`}
+                    className="w-full border p-2 mb-2 rounded"
+                    required
+                  />
+                  <textarea
+                    name="description"
+                    defaultValue={editingItem?.data?.description || ""}
+                    placeholder="Description"
+                    className="w-full border p-2 mb-2 rounded"
+                  />
                 </>
               )}
 
               {editingItem?.type === "question" && (
                 <>
-                  <textarea 
+                  <textarea
                     name="question_text" 
+                    defaultValue={editingItem?.data?.question_text || ""}
                     placeholder="Question Text" 
                     className="w-full border p-2 mb-2 rounded" 
                     required 
+                  />
+                  <input
+                    name="image_url"
+                    placeholder="Image URL (optional)"
+                    className="w-full border p-2 mb-2 rounded"
+                    value={questionImageUrl}
+                    onChange={(e) => setQuestionImageUrl(e.target.value)}
+                  />
+                  <textarea
+                    name="mermaid"
+                    placeholder="Mermaid diagram code (optional)"
+                    className="w-full border p-2 mb-2 rounded font-mono text-xs"
+                    rows={3}
+                    value={questionMermaid}
+                    onChange={(e) => setQuestionMermaid(e.target.value)}
                   />
                   
                   <div className="space-y-2 mb-2">

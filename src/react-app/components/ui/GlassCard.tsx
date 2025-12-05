@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import type { ReactNode, ElementType, ComponentPropsWithoutRef } from "react";
 
-export type GlassCardProps<T extends keyof JSX.IntrinsicElements = "div"> = {
+export type GlassCardProps<T extends ElementType = "div"> = {
   as?: T;
   children: ReactNode;
   className?: string;
@@ -8,16 +8,16 @@ export type GlassCardProps<T extends keyof JSX.IntrinsicElements = "div"> = {
    * Set to false to disable hover elevation / border change
    */
   hover?: boolean;
-} & Omit<JSX.IntrinsicElements[T], "className" | "children">;
+} & Omit<ComponentPropsWithoutRef<T>, "className" | "children">;
 
-export function GlassCard<T extends keyof JSX.IntrinsicElements = "div">({
+export function GlassCard<T extends ElementType = "div">({
   as,
   children,
   className = "",
   hover = true,
   ...rest
 }: GlassCardProps<T>) {
-  const Component = (as || "div") as keyof JSX.IntrinsicElements;
+  const Component = (as || "div") as ElementType;
   const hoverClasses = hover
     ? "hover:border-white/40 hover:bg-white/10 hover:shadow-card hover:-translate-y-[1px]"
     : "";

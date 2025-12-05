@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { useAuth } from "@getmocha/users-service/react";
+import { useAuth } from "@/react-app/auth/ApiAuth";
 import { 
   BarChart, 
   PieChart,
@@ -19,7 +19,19 @@ import {
   Eye
 } from "lucide-react";
 import Navigation from "@/react-app/components/Navigation";
-import type { MochaUser } from "@getmocha/users-service/shared";
+
+type SimpleUser = {
+  id: string;
+  email?: string;
+  google_user_data?: {
+    given_name?: string;
+    name?: string;
+    picture?: string;
+    email?: string;
+    email_verified?: boolean;
+    sub?: string;
+  };
+};
 
 // --- TYPES ---
 interface UsageSummary {
@@ -73,17 +85,13 @@ interface SessionQuestion {
 }
 
 // --- MOCK USER ---
-const MOCK_USER: MochaUser = {
+const MOCK_USER: SimpleUser = {
   id: "dev-user",
   email: "sibusiso@example.com",
-  google_sub: "dev-google-sub",
-  last_signed_in_at: new Date().toISOString(),
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
   google_user_data: {
     given_name: "Sibusiso King-Junior",
     name: "Sibusiso King-Junior Nkosi",
-    picture: null,
+    picture: undefined,
     email: "sibusiso@example.com",
     email_verified: true,
     sub: "dev-google-sub"
@@ -106,7 +114,7 @@ const fetchUsageSummary = async (startDate?: string, endDate?: string): Promise<
   if (startDate) params.append('startDate', startDate);
   if (endDate) params.append('endDate', endDate);
   
-  const response = await fetch(`/api/analytics/usage/summary?${params}`);
+  const response = await fetch(`/api/v1/analytics/usage/summary?${params}`);
   if (!response.ok) throw new Error('Failed to fetch usage summary');
   return response.json();
 };
@@ -116,7 +124,7 @@ const fetchCategoryBreakdown = async (startDate?: string, endDate?: string): Pro
   if (startDate) params.append('startDate', startDate);
   if (endDate) params.append('endDate', endDate);
   
-  const response = await fetch(`/api/analytics/usage/category-breakdown?${params}`);
+  const response = await fetch(`/api/v1/analytics/usage/category-breakdown?${params}`);
   if (!response.ok) throw new Error('Failed to fetch category breakdown');
   return response.json();
 };
@@ -126,7 +134,7 @@ const fetchMonthlyBreakdown = async (startDate?: string, endDate?: string): Prom
   if (startDate) params.append('startDate', startDate);
   if (endDate) params.append('endDate', endDate);
   
-  const response = await fetch(`/api/analytics/usage/monthly-breakdown?${params}`);
+  const response = await fetch(`/api/v1/analytics/usage/monthly-breakdown?${params}`);
   if (!response.ok) throw new Error('Failed to fetch monthly breakdown');
   return response.json();
 };
@@ -137,15 +145,26 @@ const fetchPracticeSessions = async (startDate?: string, endDate?: string, limit
   if (endDate) params.append('endDate', endDate);
   params.append('limit', limit.toString());
   
-  const response = await fetch(`/api/analytics/usage/practice-sessions?${params}`);
+  const response = await fetch(`/api/v1/analytics/usage/practice-sessions?${params}`);
   if (!response.ok) throw new Error('Failed to fetch practice sessions');
   return response.json();
 };
 
 const fetchSessionQuestions = async (sessionId: number): Promise<SessionQuestion[]> => {
-  const response = await fetch(`/api/analytics/usage/session-questions?sessionId=${sessionId}`);
+  const response = await fetch(`/api/v1/analytics/usage/session-questions?sessionId=${sessionId}`);
   if (!response.ok) throw new Error('Failed to fetch session questions');
   return response.json();
+};
+
+const formatDuration = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(mins / 60);
+  if (hrs > 0) {
+    const rem = mins % 60;
+    return `${hrs} hr ${rem} min`;
+  }
+  if (mins > 0) return `${mins} min`;
+  return "<1 min";
 };
 
 export default function Usage() {

@@ -185,6 +185,199 @@ app.get("/api/dashboard/recent-skills", async (c) => {
   }
 });
 
+// Helper: award achievements based on simple thresholds
+async function awardAchievements(c: any, userId: string) {
+  try {
+    const { results: achievements } = await c.env.DB.prepare(
+      "SELECT * FROM achievements"
+    ).all();
+
+    if (!achievements || achievements.length === 0) return;
+
+    const earnedRows = await c.env.DB.prepare(
+      "SELECT achievement_id FROM user_achievements WHERE user_id = ?"
+    )
+      .bind(userId)
+      .all();
+
+    const earnedSet = new Set(
+      (earnedRows.results || []).map((row: any) => row.achievement_id)
+    );
+
+    const totals = await c.env.DB.prepare(
+      `
+      SELECT
+        SUM(questions_attempted) as total_attempted,
+        SUM(questions_correct) as total_correct,
+        MAX(current_streak) as max_streak,
+        SUM(CASE WHEN is_mastered = 1 THEN 1 ELSE 0 END) as mastered_count
+      FROM skill_progress
+      WHERE user_id = ?
+      `
+    )
+      .bind(userId)
+      .first();
+
+    const statsRow = await c.env.DB.prepare(
+      "SELECT total_xp FROM user_stats WHERE user_id = ?"
+    )
+      .bind(userId)
+      .first();
+
+    const totalAttempted = totals?.total_attempted || 0;
+    const totalCorrect = totals?.total_correct || 0;
+    const maxStreak = totals?.max_streak || 0;
+    const masteredCount = totals?.mastered_count || 0;
+    const totalXp = statsRow?.total_xp || 0;
+
+    const now = new Date().toISOString();
+
+    for (const ach of achievements) {
+      if (earnedSet.has(ach.id)) continue;
+
+      let shouldEarn = false;
+
+      switch (ach.achievement_type) {
+        case "first_question":
+          shouldEarn = totalAttempted > 0 || totalCorrect > 0;
+          break;
+        case "streak":
+        case "daily_streak":
+          shouldEarn = maxStreak >= 7;
+          break;
+        case "skills_mastered":
+          shouldEarn = masteredCount >= 5;
+          break;
+        case "correct_answers":
+          shouldEarn = totalCorrect >= 50;
+          break;
+        case "level":
+          shouldEarn = totalXp >= 5000;
+          break;
+        default:
+          shouldEarn = false;
+      }
+
+      if (shouldEarn) {
+        await c.env.DB.prepare(
+          "INSERT INTO user_achievements (user_id, achievement_id, earned_at) VALUES (?, ?, ?)"
+        )
+          .bind(userId, ach.id, now)
+          .run();
+      }
+    }
+  } catch (err) {
+    console.warn("awardAchievements failed:", err);
+  }
+}
+
+// ============================================================
+// ACHIEVEMENTS ENDPOINTS (NO AUTH FOR DEV)
+// ============================================================
+
+app.get("/api/achievements", async (c) => {
+  const userId = "dev-user";
+
+  try {
+    await awardAchievements(c, userId);
+
+    const { results: achievements } = await c.env.DB.prepare(
+      `
+      SELECT
+        id,
+        name,
+        description,
+        badge_icon_url,
+        achievement_type,
+        points_value
+      FROM achievements
+      `
+    ).all();
+
+    const { results: earned } = await c.env.DB.prepare(
+      `
+      SELECT achievement_id, earned_at
+      FROM user_achievements
+      WHERE user_id = ?
+      `
+    ).bind(userId).all();
+
+    const earnedMap = new Map<number, string | null>();
+    (earned || []).forEach((row: any) => {
+      earnedMap.set(row.achievement_id, row.earned_at || null);
+    });
+
+    const payload =
+      achievements?.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        badge_icon_url: a.badge_icon_url,
+        achievement_type: a.achievement_type,
+        points_value: a.points_value,
+        is_earned: earnedMap.has(a.id),
+        earned_at: earnedMap.get(a.id) || null,
+      })) || [];
+
+    return c.json(payload, 200);
+  } catch (error) {
+    console.error("Achievements fetch error:", error);
+    // Fallback to empty list to keep frontend functional
+    return c.json([], 200);
+  }
+});
+
+app.get("/api/achievements/level", async (c) => {
+  const userId = "dev-user";
+
+  try {
+    await awardAchievements(c, userId);
+
+    const statsRow = await c.env.DB.prepare(
+      "SELECT total_xp FROM user_stats WHERE user_id = ?"
+    )
+      .bind(userId)
+      .first();
+
+    const totalXp = Number(statsRow?.total_xp ?? 0);
+    const currentLevel = Math.max(1, Math.floor(totalXp / 1000) + 1);
+    const xpForNextLevel = currentLevel * 1000;
+
+    const totalAchievementsRow = await c.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM achievements"
+    ).first();
+
+    const earnedAchievementsRow = await c.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM user_achievements WHERE user_id = ?"
+    )
+      .bind(userId)
+      .first();
+
+    return c.json(
+      {
+        current_level: currentLevel,
+        current_xp: totalXp,
+        xp_for_next_level: xpForNextLevel,
+        total_achievements: totalAchievementsRow?.count ?? 0,
+        earned_achievements: earnedAchievementsRow?.count ?? 0,
+      },
+      200
+    );
+  } catch (error) {
+    console.error("Achievements level error:", error);
+    return c.json(
+      {
+        current_level: 1,
+        current_xp: 0,
+        xp_for_next_level: 1000,
+        total_achievements: 0,
+        earned_achievements: 0,
+      },
+      200
+    );
+  }
+});
+
 // ============================================================
 // DAILY CHALLENGES ENDPOINTS
 // ============================================================
@@ -200,7 +393,7 @@ app.get("/api/daily-challenges/today", authMiddleware, async (c) => {
   const today = new Date().toISOString().slice(0, 10);
 
   try {
-    const challenge = await c.env.DB.prepare(
+    const challenge = (await c.env.DB.prepare(
       `
       SELECT 
         dc.id,
@@ -226,20 +419,7 @@ app.get("/api/daily-challenges/today", authMiddleware, async (c) => {
       `
     )
       .bind(user.id, today)
-      .first<{
-        id: number;
-        skill_id: number;
-        skill_name: string;
-        subject_name: string;
-        questions_required: number;
-        accuracy_required: number;
-        xp_reward: number;
-        challenge_date: string;
-        questions_completed: number;
-        questions_correct: number;
-        is_completed: number;
-        completed_at: string | null;
-      }>();
+      .first()) as any;
 
     if (!challenge) {
       // No challenge for today
@@ -300,22 +480,9 @@ app.get("/api/daily-challenges/history", authMiddleware, async (c) => {
       `
     )
       .bind(user.id, limit)
-      .all<{
-        id: number;
-        skill_id: number;
-        skill_name: string;
-        subject_name: string;
-        questions_required: number;
-        accuracy_required: number;
-        xp_reward: number;
-        challenge_date: string;
-        questions_completed: number;
-        questions_correct: number;
-        is_completed: number;
-        completed_at: string | null;
-      }>();
+      .all();
 
-    const rows = (result.results || []).map((row) => ({
+    const rows = (result.results || []).map((row: any) => ({
       ...row,
       is_completed: Boolean(row.is_completed),
     }));
@@ -344,7 +511,7 @@ app.get("/api/daily-challenges/stats", authMiddleware, async (c) => {
       `
     )
       .bind(user.id)
-      .first<{ count: number }>();
+      .first();
 
     const statsRow = await c.env.DB.prepare(
       `
@@ -354,10 +521,10 @@ app.get("/api/daily-challenges/stats", authMiddleware, async (c) => {
       `
     )
       .bind(user.id)
-      .first<{ current_weekly_streak: number }>();
+      .first();
 
-    const totalCompleted = totalCompletedRow?.count ?? 0;
-    const currentStreak = statsRow?.current_weekly_streak ?? 0;
+    const totalCompleted = (totalCompletedRow as any)?.count ?? 0;
+    const currentStreak = (statsRow as any)?.current_weekly_streak ?? 0;
 
     return c.json(
       {
@@ -388,7 +555,7 @@ app.post(
     }
 
     try {
-      const row = await c.env.DB.prepare(
+      const row = (await c.env.DB.prepare(
         `
         SELECT 
           dc.target_questions,
@@ -404,14 +571,7 @@ app.post(
         `
       )
         .bind(user.id, challengeId)
-        .first<{
-          target_questions: number;
-          target_accuracy: number;
-          xp_reward: number;
-          questions_completed: number;
-          questions_correct: number;
-          is_completed: number;
-        }>();
+        .first()) as any;
 
       if (!row) {
         return c.json({ error: "Challenge progress not found" }, 404);
